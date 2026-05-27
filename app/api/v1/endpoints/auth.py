@@ -33,7 +33,7 @@ def login(payload: LoginRequest, db: DbSession):
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"{type(exc).__name__}: {exc}",
+            detail="Login failed due to a server error.",
         ) from exc
 
 

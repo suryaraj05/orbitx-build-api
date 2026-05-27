@@ -30,13 +30,21 @@ def create_access_token(subject: str | int, expires_delta: timedelta | None = No
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    payload: dict[str, Any] = {"sub": str(subject), "exp": expire, "type": "access"}
+    payload: dict[str, Any] = {
+        "sub": str(subject),
+        "exp": int(expire.timestamp()),
+        "type": "access",
+    }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def create_refresh_token(subject: str | int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    payload: dict[str, Any] = {"sub": str(subject), "exp": expire, "type": "refresh"}
+    payload: dict[str, Any] = {
+        "sub": str(subject),
+        "exp": int(expire.timestamp()),
+        "type": "refresh",
+    }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
