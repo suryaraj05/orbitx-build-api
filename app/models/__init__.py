@@ -12,6 +12,7 @@ from app.models.resource import Resource
 from app.models.theme import Theme
 from app.models.user import User
 from app.models.video import Video
+from app.models.audit_log import AuditLog
 
 __all__ = [
     "User",
@@ -27,4 +28,5 @@ __all__ = [
     "Resource",
     "Comment",
     "NewsletterSubscriber",
+    "AuditLog",
 ]

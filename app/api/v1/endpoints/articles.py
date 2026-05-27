@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload
 
@@ -15,6 +15,7 @@ from app.schemas.article import (
 )
 from app.schemas.common import MessageResponse
 from app.utils import apply_updates
+from app.utils.audit import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/articles", tags=["articles"])
 
@@ -95,7 +96,7 @@ def get_article(slug: str, db: DbSession):
 
 
 @router.post("", response_model=ArticleRead, status_code=status.HTTP_201_CREATED)
-def create_article(payload: ArticleCreate, db: DbSession, user: EditorUser):
+def create_article(payload: ArticleCreate, db: DbSession, user: EditorUser, request: Request):
     data = payload.model_dump()
     if data.get("author_id") is None:
         data["author_id"] = user.id
@@ -103,57 +104,121 @@ def create_article(payload: ArticleCreate, db: DbSession, user: EditorUser):
     db.add(article)
     db.commit()
     db.refresh(article)
+    write_audit_log(
+        db,
+        actor=user,
+        action="create",
+        entity_type="article",
+        entity_id=str(article.id),
+        before=None,
+        after=model_snapshot(article),
+        request=request,
+    )
     return article
 
 
 @router.patch("/{article_id}", response_model=ArticleRead)
-def update_article(article_id: int, payload: ArticleUpdate, db: DbSession, _: EditorUser):
+def update_article(article_id: int, payload: ArticleUpdate, db: DbSession, user: EditorUser, request: Request):
     article = db.get(Article, article_id)
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
+    before = model_snapshot(article)
     apply_updates(article, payload.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(article)
+    write_audit_log(
+        db,
+        actor=user,
+        action="update",
+        entity_type="article",
+        entity_id=str(article.id),
+        before=before,
+        after=model_snapshot(article),
+        request=request,
+    )
     return article
 
 
 @router.delete("/{article_id}", response_model=MessageResponse)
-def delete_article(article_id: int, db: DbSession, _: AdminUser):
+def delete_article(article_id: int, db: DbSession, user: AdminUser, request: Request):
     article = db.get(Article, article_id)
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
+    before = model_snapshot(article)
     db.delete(article)
     db.commit()
+    write_audit_log(
+        db,
+        actor=user,
+        action="delete",
+        entity_type="article",
+        entity_id=str(article_id),
+        before=before,
+        after=None,
+        request=request,
+    )
     return MessageResponse(message="Article deleted")
 
 
 @router.post("/{article_id}/sections", response_model=ArticleSectionRead, status_code=201)
-def add_section(article_id: int, payload: ArticleSectionCreate, db: DbSession, _: EditorUser):
+def add_section(article_id: int, payload: ArticleSectionCreate, db: DbSession, user: EditorUser, request: Request):
     if db.get(Article, article_id) is None:
         raise HTTPException(status_code=404, detail="Article not found")
     section = ArticleSection(article_id=article_id, **payload.model_dump())
     db.add(section)
     db.commit()
     db.refresh(section)
+    write_audit_log(
+        db,
+        actor=user,
+        action="create",
+        entity_type="article_section",
+        entity_id=str(section.id),
+        before=None,
+        after=model_snapshot(section),
+        request=request,
+    )
     return section
 
 
 @router.patch("/article-sections/{section_id}", response_model=ArticleSectionRead)
-def update_section(section_id: int, payload: ArticleSectionCreate, db: DbSession, _: EditorUser):
+def update_section(section_id: int, payload: ArticleSectionCreate, db: DbSession, user: EditorUser, request: Request):
     section = db.get(ArticleSection, section_id)
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
+    before = model_snapshot(section)
     apply_updates(section, payload.model_dump())
     db.commit()
     db.refresh(section)
+    write_audit_log(
+        db,
+        actor=user,
+        action="update",
+        entity_type="article_section",
+        entity_id=str(section.id),
+        before=before,
+        after=model_snapshot(section),
+        request=request,
+    )
     return section
 
 
 @router.delete("/article-sections/{section_id}", response_model=MessageResponse)
-def delete_section(section_id: int, db: DbSession, _: EditorUser):
+def delete_section(section_id: int, db: DbSession, user: EditorUser, request: Request):
     section = db.get(ArticleSection, section_id)
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
+    before = model_snapshot(section)
     db.delete(section)
     db.commit()
+    write_audit_log(
+        db,
+        actor=user,
+        action="delete",
+        entity_type="article_section",
+        entity_id=str(section_id),
+        before=before,
+        after=None,
+        request=request,
+    )
     return MessageResponse(message="Section deleted")

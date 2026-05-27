@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     articles,
     auth,
+    audit_logs,
     categories,
     comments,
     newsletter,
@@ -24,3 +25,4 @@ api_router.include_router(resources.router)
 api_router.include_router(comments.router)
 api_router.include_router(search.router)
 api_router.include_router(newsletter.router)
+api_router.include_router(audit_logs.router)

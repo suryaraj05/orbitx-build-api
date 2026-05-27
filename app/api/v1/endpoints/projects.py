@@ -1,6 +1,6 @@
 import re
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
@@ -28,6 +28,7 @@ from app.schemas.project import (
     ProjectUpdate,
 )
 from app.utils import apply_updates
+from app.utils.audit import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -161,20 +162,31 @@ def get_project(slug: str, db: DbSession):
 
 
 @router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
-def create_project(payload: ProjectCreate, db: DbSession, _: EditorUser):
+def create_project(payload: ProjectCreate, db: DbSession, user: EditorUser, request: Request):
     project = Project(**payload.model_dump())
     db.add(project)
     db.commit()
     db.refresh(project)
+    write_audit_log(
+        db,
+        actor=user,
+        action="create",
+        entity_type="project",
+        entity_id=str(project.id),
+        before=None,
+        after=model_snapshot(project),
+        request=request,
+    )
     return project
 
 
 @router.put("/{slug}", response_model=ProjectRead)
-def put_project(slug: str, payload: ProjectCreate, db: DbSession, _: EditorUser):
+def put_project(slug: str, payload: ProjectCreate, db: DbSession, user: EditorUser, request: Request):
     project = db.scalar(select(Project).where(Project.slug == slug))
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
+    before = model_snapshot(project)
     data = payload.model_dump()
     for key, value in data.items():
         setattr(project, key, value)
@@ -182,15 +194,26 @@ def put_project(slug: str, payload: ProjectCreate, db: DbSession, _: EditorUser)
     db.commit()
     db.refresh(project)
     normalize_project_for_response(project)
+    write_audit_log(
+        db,
+        actor=user,
+        action="update",
+        entity_type="project",
+        entity_id=str(project.id),
+        before=before,
+        after=model_snapshot(project),
+        request=request,
+    )
     return project
 
 
 @router.patch("/{slug}", response_model=ProjectRead)
-def patch_project(slug: str, payload: ProjectUpdate, db: DbSession, _: EditorUser):
+def patch_project(slug: str, payload: ProjectUpdate, db: DbSession, user: EditorUser, request: Request):
     project = db.scalar(select(Project).where(Project.slug == slug))
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
+    before = model_snapshot(project)
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(project, key, value)
@@ -198,38 +221,81 @@ def patch_project(slug: str, payload: ProjectUpdate, db: DbSession, _: EditorUse
     db.commit()
     db.refresh(project)
     normalize_project_for_response(project)
+    write_audit_log(
+        db,
+        actor=user,
+        action="update",
+        entity_type="project",
+        entity_id=str(project.id),
+        before=before,
+        after=model_snapshot(project),
+        request=request,
+    )
     return project
 
 
 @router.delete("/{slug}", response_model=MessageResponse)
-def delete_project_by_slug(slug: str, db: DbSession, _: AdminUser):
+def delete_project_by_slug(slug: str, db: DbSession, user: AdminUser, request: Request):
     project = db.scalar(select(Project).where(Project.slug == slug))
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    before = model_snapshot(project)
     db.delete(project)
     db.commit()
+    write_audit_log(
+        db,
+        actor=user,
+        action="delete",
+        entity_type="project",
+        entity_id=str(project.id),
+        before=before,
+        after=None,
+        request=request,
+    )
     return MessageResponse(message="Project deleted")
 
 
 @router.patch("/{project_id}", response_model=ProjectRead)
-def update_project(project_id: int, payload: ProjectUpdate, db: DbSession, _: EditorUser):
+def update_project(project_id: int, payload: ProjectUpdate, db: DbSession, user: EditorUser, request: Request):
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    before = model_snapshot(project)
     apply_updates(project, payload.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(project)
     normalize_project_for_response(project)
+    write_audit_log(
+        db,
+        actor=user,
+        action="update",
+        entity_type="project",
+        entity_id=str(project.id),
+        before=before,
+        after=model_snapshot(project),
+        request=request,
+    )
     return project
 
 
 @router.delete("/{project_id}", response_model=MessageResponse)
-def delete_project(project_id: int, db: DbSession, _: AdminUser):
+def delete_project(project_id: int, db: DbSession, user: AdminUser, request: Request):
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    before = model_snapshot(project)
     db.delete(project)
     db.commit()
+    write_audit_log(
+        db,
+        actor=user,
+        action="delete",
+        entity_type="project",
+        entity_id=str(project_id),
+        before=before,
+        after=None,
+        request=request,
+    )
     return MessageResponse(message="Project deleted")
 
 
@@ -237,34 +303,66 @@ def delete_project(project_id: int, db: DbSession, _: AdminUser):
 
 
 @router.post("/{project_id}/features", response_model=ProjectFeatureRead, status_code=201)
-def add_feature(project_id: int, payload: ProjectFeatureCreate, db: DbSession, _: EditorUser):
+def add_feature(project_id: int, payload: ProjectFeatureCreate, db: DbSession, user: EditorUser, request: Request):
     if db.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Project not found")
     feature = ProjectFeature(project_id=project_id, **payload.model_dump())
     db.add(feature)
     db.commit()
     db.refresh(feature)
+    write_audit_log(
+        db,
+        actor=user,
+        action="create",
+        entity_type="project_feature",
+        entity_id=str(feature.id),
+        before=None,
+        after=model_snapshot(feature),
+        request=request,
+    )
     return feature
 
 
 @router.patch("/project-features/{feature_id}", response_model=ProjectFeatureRead)
-def update_feature(feature_id: int, payload: ProjectFeatureCreate, db: DbSession, _: EditorUser):
+def update_feature(feature_id: int, payload: ProjectFeatureCreate, db: DbSession, user: EditorUser, request: Request):
     feature = db.get(ProjectFeature, feature_id)
     if feature is None:
         raise HTTPException(status_code=404, detail="Feature not found")
+    before = model_snapshot(feature)
     apply_updates(feature, payload.model_dump())
     db.commit()
     db.refresh(feature)
+    write_audit_log(
+        db,
+        actor=user,
+        action="update",
+        entity_type="project_feature",
+        entity_id=str(feature.id),
+        before=before,
+        after=model_snapshot(feature),
+        request=request,
+    )
     return feature
 
 
 @router.delete("/project-features/{feature_id}", response_model=MessageResponse)
-def delete_feature(feature_id: int, db: DbSession, _: EditorUser):
+def delete_feature(feature_id: int, db: DbSession, user: EditorUser, request: Request):
     feature = db.get(ProjectFeature, feature_id)
     if feature is None:
         raise HTTPException(status_code=404, detail="Feature not found")
+    before = model_snapshot(feature)
     db.delete(feature)
     db.commit()
+    write_audit_log(
+        db,
+        actor=user,
+        action="delete",
+        entity_type="project_feature",
+        entity_id=str(feature_id),
+        before=before,
+        after=None,
+        request=request,
+    )
     return MessageResponse(message="Feature deleted")
 
 
@@ -272,34 +370,66 @@ def delete_feature(feature_id: int, db: DbSession, _: EditorUser):
 
 
 @router.post("/{project_id}/stack", response_model=ProjectTechStackRead, status_code=201)
-def add_stack_item(project_id: int, payload: ProjectTechStackCreate, db: DbSession, _: EditorUser):
+def add_stack_item(project_id: int, payload: ProjectTechStackCreate, db: DbSession, user: EditorUser, request: Request):
     if db.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Project not found")
     item = ProjectTechStack(project_id=project_id, **payload.model_dump())
     db.add(item)
     db.commit()
     db.refresh(item)
+    write_audit_log(
+        db,
+        actor=user,
+        action="create",
+        entity_type="project_stack_item",
+        entity_id=str(item.id),
+        before=None,
+        after=model_snapshot(item),
+        request=request,
+    )
     return item
 
 
 @router.patch("/project-stack/{stack_id}", response_model=ProjectTechStackRead)
-def update_stack_item(stack_id: int, payload: ProjectTechStackCreate, db: DbSession, _: EditorUser):
+def update_stack_item(stack_id: int, payload: ProjectTechStackCreate, db: DbSession, user: EditorUser, request: Request):
     item = db.get(ProjectTechStack, stack_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Stack item not found")
+    before = model_snapshot(item)
     apply_updates(item, payload.model_dump())
     db.commit()
     db.refresh(item)
+    write_audit_log(
+        db,
+        actor=user,
+        action="update",
+        entity_type="project_stack_item",
+        entity_id=str(item.id),
+        before=before,
+        after=model_snapshot(item),
+        request=request,
+    )
     return item
 
 
 @router.delete("/project-stack/{stack_id}", response_model=MessageResponse)
-def delete_stack_item(stack_id: int, db: DbSession, _: EditorUser):
+def delete_stack_item(stack_id: int, db: DbSession, user: EditorUser, request: Request):
     item = db.get(ProjectTechStack, stack_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Stack item not found")
+    before = model_snapshot(item)
     db.delete(item)
     db.commit()
+    write_audit_log(
+        db,
+        actor=user,
+        action="delete",
+        entity_type="project_stack_item",
+        entity_id=str(stack_id),
+        before=before,
+        after=None,
+        request=request,
+    )
     return MessageResponse(message="Stack item deleted")
 
 
