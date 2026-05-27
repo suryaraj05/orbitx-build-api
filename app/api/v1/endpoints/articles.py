@@ -15,7 +15,7 @@ from app.schemas.article import (
 )
 from app.schemas.common import MessageResponse
 from app.utils import apply_updates
-from app.utils.audit import model_snapshot, write_audit_log
+from app.audit import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/articles", tags=["articles"])
 

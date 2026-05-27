@@ -6,7 +6,7 @@ from app.models.category import Category
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.common import MessageResponse
 from app.utils import apply_updates
-from app.utils.audit import model_snapshot, write_audit_log
+from app.audit import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 

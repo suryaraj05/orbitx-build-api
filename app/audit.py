@@ -18,7 +18,6 @@ def _jsonable(value: Any) -> Any:
 
 
 def model_snapshot(obj: Any) -> dict[str, Any]:
-    """Best-effort snapshot of SQLAlchemy model columns (no relationships)."""
     data: dict[str, Any] = {}
     mapper = inspect(obj).mapper
     for attr in mapper.column_attrs:

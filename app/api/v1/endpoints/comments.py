@@ -5,7 +5,7 @@ from app.core.deps import DbSession
 from app.models.article import Article
 from app.models.comment import Comment
 from app.schemas.comment import CommentCreate, CommentRead
-from app.utils.audit import model_snapshot, write_audit_log
+from app.audit import model_snapshot, write_audit_log
 
 router = APIRouter(tags=["comments"])
 

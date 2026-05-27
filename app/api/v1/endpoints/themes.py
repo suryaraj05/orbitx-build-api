@@ -6,7 +6,7 @@ from app.models.theme import Theme
 from app.schemas.common import MessageResponse
 from app.schemas.theme import ThemeCreate, ThemeRead, ThemeUpdate
 from app.utils import apply_updates
-from app.utils.audit import model_snapshot, write_audit_log
+from app.audit import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/themes", tags=["themes"])
 

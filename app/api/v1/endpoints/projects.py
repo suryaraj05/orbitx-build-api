@@ -28,7 +28,7 @@ from app.schemas.project import (
     ProjectUpdate,
 )
 from app.utils import apply_updates
-from app.utils.audit import model_snapshot, write_audit_log
+from app.audit import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 

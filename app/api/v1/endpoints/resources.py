@@ -6,7 +6,7 @@ from app.models.resource import Resource
 from app.schemas.common import MessageResponse
 from app.schemas.resource import ResourceCreate, ResourceRead, ResourceUpdate
 from app.utils import apply_updates
-from app.utils.audit import model_snapshot, write_audit_log
+from app.audit import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/resources", tags=["resources"])
 
